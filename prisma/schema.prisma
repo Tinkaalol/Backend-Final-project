@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STOREKEEPER
+}
+
+enum Category {
+  EQUIPMENT
+  COFFEE
+  ACCESSORIES
+}
+
+enum MovementType {
+  INCOME
+  EXPENSE
+  ADJUSTMENT
+  WRITEOFF
+}
+
+enum ProductStatus {
+  ACTIVE
+  DISPLAY_SAMPLE
+  DISCONTINUED
+  CRITICAL_DEADSTOCK
+}
+
+enum AlertType {
+  LOW_STOCK
+  CRITICAL_DEADSTOCK
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users     User[]
+  products  Product[]
+  locations Location[]
+  auditLogs AuditLog[]
+}
+
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  passwordHash          String
+  role                  Role      @default(STOREKEEPER)
+  isActive              Boolean   @default(true)
+  isEmailVerified       Boolean   @default(false)
+  emailVerifyToken      String?
+  emailVerifyExpiresAt  DateTime?
+  passwordResetToken    String?
+  passwordResetExpiresAt DateTime?
+  tenantId              String
+  createdAt             DateTime  @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  movements    MovementLog[]
+  auditLogs    AuditLog[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([emailVerifyToken])
+  @@index([passwordResetToken])
+}
+
+model Location {
+  id       String  @id @default(uuid())
+  name     String
+  address  String
+  tenantId String
+
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+  stocks   Stock[]
+  alerts   Alert[]
+
+  @@index([tenantId])
+}
+
+model Product {
+  id              String        @id @default(uuid())
+  sku             String        @unique
+  name            String
+  brand           String
+  category        Category      @default(EQUIPMENT)
+  status          ProductStatus @default(ACTIVE)
+  basePrice       Int
+  costPrice       Int
+  discountPercent Int           @default(0)
+  currentPrice    Int
+  daysInInventory Int           @default(0)
+  tenantId        String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  stocks          Stock[]
+  decayEvents     DecayEvent[]
+  alerts          Alert[]
+
+  @@index([tenantId])
+  @@index([tenantId, category])
+  @@index([tenantId, status])
+  @@index([sku])
+}
+
+model Stock {
+  id               String   @id @default(uuid())
+  quantity         Int      @default(0)
+  reorderThreshold Int      @default(5)
+  productId        String
+  locationId       String
+  updatedAt        DateTime @updatedAt
+
+  product          Product       @relation(fields: [productId], references: [id])
+  location         Location      @relation(fields: [locationId], references: [id])
+  movements        MovementLog[]
+
+  @@unique([productId, locationId])
+  @@index([productId])
+  @@index([locationId])
+}
+
+model MovementLog {
+  id            String       @id @default(uuid())
+  stockId       String
+  userId        String
+  type          MovementType
+  quantityDelta Int
+  quantityAfter Int
+  note          String?
+  createdAt     DateTime     @default(now())
+
+  stock         Stock        @relation(fields: [stockId], references: [id])
+  user          User         @relation(fields: [userId], references: [id])
+
+  @@index([stockId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([stockId, createdAt])
+}
+
+model DecayEvent {
+  id              String   @id @default(uuid())
+  productId       String
+  previousPrice   Int
+  newPrice        Int
+  discountPercent Int
+  daysInInventory Int
+  appliedAt       DateTime @default(now())
+
+  product         Product  @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([appliedAt])
+}
+
+model Alert {
+  id          String    @id @default(uuid())
+  type        AlertType
+  productId   String
+  locationId  String
+  isResolved  Boolean   @default(false)
+  triggeredAt DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  product     Product   @relation(fields: [productId], references: [id])
+  location    Location  @relation(fields: [locationId], references: [id])
+
+  @@index([productId, isResolved])
+  @@index([locationId, isResolved])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  tenantId   String
+  action     String
+  entityType String
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([userId])
+  @@index([entityType, entityId])
+}

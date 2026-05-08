@@ -1,0 +1,1439 @@
+openapi: 3.0.3
+info:
+  title: LeanStock Backend API
+  description: |
+    Production-grade inventory management system for coffee equipment retailers.
+    Handles multi-tenant stock tracking, dead-stock decay pricing, demand forecasting,
+    and full audit logging across warehouses.
+  version: 1.0.0
+  contact:
+    name: LeanStock
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Registration, login, token lifecycle, email verification, password reset
+  - name: Users
+    description: Staff management within a tenant (ADMIN only)
+  - name: Products
+    description: Product catalogue with decay-aware pricing
+  - name: Inventory
+    description: Stock movements — income, expense, transfer, history, alerts
+  - name: Decay
+    description: Dead-stock decay events and manual trigger
+  - name: Locations
+    description: Warehouse / store locations
+  - name: Forecast
+    description: Simple moving-average demand forecasting
+  - name: Queue
+    description: BullMQ email queue observability
+  - name: Health
+    description: Liveness probe
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+          example: "eyJpZCI6ImFiYzEyMyJ9"
+        hasMore:
+          type: boolean
+          example: true
+        limit:
+          type: integer
+          example: 20
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Invalid request body
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    Role:
+      type: string
+      enum: [ADMIN, MANAGER, STOREKEEPER]
+
+    Category:
+      type: string
+      enum: [EQUIPMENT, COFFEE, ACCESSORIES]
+
+    ProductStatus:
+      type: string
+      enum: [ACTIVE, DISPLAY_SAMPLE, DISCONTINUED, CRITICAL_DEADSTOCK]
+
+    MovementType:
+      type: string
+      enum: [INCOME, EXPENSE, ADJUSTMENT, WRITEOFF]
+
+    AlertType:
+      type: string
+      enum: [LOW_STOCK, CRITICAL_DEADSTOCK]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        email:
+          type: string
+          format: email
+          example: "manager@coffeeshop.kz"
+        role:
+          $ref: '#/components/schemas/Role'
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Tokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT, expires in 15 minutes
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+          description: JWT, expires in 7 days, rotated on each use
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "b1c2d3e4-f5a6-7890-abcd-ef1234567890"
+        sku:
+          type: string
+          example: "JURA-E8-BLK"
+        name:
+          type: string
+          example: "Jura E8 Black"
+        brand:
+          type: string
+          example: "Jura"
+        category:
+          $ref: '#/components/schemas/Category'
+        status:
+          $ref: '#/components/schemas/ProductStatus'
+        basePrice:
+          type: integer
+          description: Original price in KZT (tenge)
+          example: 285000
+        costPrice:
+          type: integer
+          description: Procurement cost in KZT
+          example: 190000
+        currentPrice:
+          type: integer
+          description: Effective selling price after any decay discount
+          example: 256500
+        discountPercent:
+          type: integer
+          description: Applied decay discount (0-50%)
+          example: 10
+        daysInInventory:
+          type: integer
+          description: Days since last stock replenishment
+          example: 45
+        tenantId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Stock:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          example: 7
+        reorderThreshold:
+          type: integer
+          example: 5
+        productId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        updatedAt:
+          type: string
+          format: date-time
+
+    MovementLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/MovementType'
+        quantityDelta:
+          type: integer
+          description: Positive for INCOME, negative for EXPENSE/WRITEOFF
+          example: -3
+        quantityAfter:
+          type: integer
+          example: 7
+        note:
+          type: string
+          nullable: true
+          example: "Sold to customer #88"
+        createdAt:
+          type: string
+          format: date-time
+        stock:
+          type: object
+          properties:
+            product:
+              $ref: '#/components/schemas/Product'
+            location:
+              $ref: '#/components/schemas/Location'
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+            role:
+              $ref: '#/components/schemas/Role'
+
+    Location:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "d4e5f6a7-b8c9-0123-def0-1234567890ab"
+        name:
+          type: string
+          example: "Almaty Warehouse"
+        address:
+          type: string
+          example: "Abay Ave 150, Almaty"
+        tenantId:
+          type: string
+          format: uuid
+
+    DecayEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        previousPrice:
+          type: integer
+          example: 285000
+        newPrice:
+          type: integer
+          example: 256500
+        discountPercent:
+          type: integer
+          example: 10
+        daysInInventory:
+          type: integer
+          example: 45
+        appliedAt:
+          type: string
+          format: date-time
+        product:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            sku:
+              type: string
+            name:
+              type: string
+
+    Alert:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/Product'
+        location:
+          $ref: '#/components/schemas/Location'
+        deficit:
+          type: integer
+          nullable: true
+          description: Units below reorder threshold
+          example: 3
+        triggeredAt:
+          type: string
+          format: date-time
+
+    ForecastResult:
+      type: object
+      properties:
+        product:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            sku:
+              type: string
+            name:
+              type: string
+        forecast:
+          type: object
+          properties:
+            periodWeeks:
+              type: integer
+              example: 4
+            totalSoldInPeriod:
+              type: integer
+              example: 28
+            avgWeeklySales:
+              type: number
+              format: float
+              example: 7.0
+            reorderPoint:
+              type: integer
+              description: Units (2-week lead time × avg weekly sales)
+              example: 14
+            currentStock:
+              type: integer
+              example: 7
+            weeksOfStockLeft:
+              type: string
+              example: "1.0"
+            needsReorder:
+              type: boolean
+              example: true
+        stockByLocation:
+          type: array
+          items:
+            type: object
+            properties:
+              location:
+                type: string
+              quantity:
+                type: integer
+
+paths:
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user (email verification required before login)
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, tenantId]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "storekeeper@coffeeshop.kz"
+                password:
+                  type: string
+                  minLength: 8
+                  description: Must contain at least one uppercase letter and one digit
+                  example: "SecurePass1"
+                role:
+                  $ref: '#/components/schemas/Role'
+                tenantId:
+                  type: string
+                  format: uuid
+                  example: "a0000000-0000-0000-0000-000000000001"
+      responses:
+        '201':
+          description: User created — verification email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Registration successful. Please check your email to verify your account."
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: DUPLICATE_EMAIL
+                message: "A user with this email already exists"
+        '429':
+          description: Rate limit exceeded (5 req/min per IP)
+
+  /auth/verify-email:
+    get:
+      tags: [Auth]
+      summary: Verify email address via token link
+      operationId: verifyEmail
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Token from the verification email
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Email verified successfully. You can now log in."
+        '400':
+          description: Token missing, invalid, or expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: INVALID_TOKEN
+                message: "Invalid or expired verification token"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login — returns access + refresh tokens
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "manager@coffeeshop.kz"
+                password:
+                  type: string
+                  example: "SecurePass1"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Tokens'
+                  - type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: INVALID_CREDENTIALS
+                message: "Invalid credentials"
+        '403':
+          description: Email not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: EMAIL_NOT_VERIFIED
+                message: "Please verify your email before logging in"
+        '429':
+          description: Rate limit exceeded (5 req/min per IP)
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Issue new access + refresh token pair (rotates refresh token)
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: New token pair issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        '401':
+          description: Invalid, expired, or revoked refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid:
+                  value: { code: INVALID_REFRESH_TOKEN, message: "Invalid or expired refresh token" }
+                revoked:
+                  value: { code: TOKEN_REVOKED, message: "Refresh token has been revoked" }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke refresh token (idempotent)
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '204':
+          description: Logged out successfully (token revoked in Redis)
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset email
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "manager@coffeeshop.kz"
+      responses:
+        '200':
+          description: Always succeeds to prevent email enumeration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "If this email exists, a reset link has been sent."
+        '429':
+          description: Rate limit exceeded
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with token from email
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                  format: uuid
+                newPassword:
+                  type: string
+                  minLength: 8
+                  example: "NewSecurePass1"
+      responses:
+        '200':
+          description: Password changed; all sessions revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password reset successfully. You can now log in."
+        '400':
+          description: Token invalid or expired
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user profile
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List all staff in tenant (ADMIN)
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Base64-encoded pagination cursor
+      responses:
+        '200':
+          description: Paginated staff list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Not authenticated
+        '403':
+          description: Not ADMIN
+
+    post:
+      tags: [Users]
+      summary: Create new staff account (ADMIN)
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "newstaff@coffeeshop.kz"
+                password:
+                  type: string
+                  minLength: 8
+                  example: "StaffPass1"
+                role:
+                  $ref: '#/components/schemas/Role'
+      responses:
+        '201':
+          description: Staff account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '409':
+          description: Email already registered
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get single staff member (ADMIN)
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: Not found
+
+    patch:
+      tags: [Users]
+      summary: Update role or active status (ADMIN)
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: '#/components/schemas/Role'
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '403':
+          description: Cannot modify your own account
+
+  /products:
+    get:
+      tags: [Products]
+      summary: List products with filters and cursor pagination
+      operationId: listProducts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/Category'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ProductStatus'
+        - name: brand
+          in: query
+          schema:
+            type: string
+            example: "Jura"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, -createdAt, currentPrice, -currentPrice]
+            default: -createdAt
+      responses:
+        '200':
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Not authenticated
+
+    post:
+      tags: [Products]
+      summary: Create product (MANAGER+)
+      operationId: createProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku, name, brand, category, basePrice, costPrice]
+              properties:
+                sku:
+                  type: string
+                  pattern: '^[A-Z0-9-]+$'
+                  minLength: 4
+                  maxLength: 20
+                  example: "JURA-E8-BLK"
+                name:
+                  type: string
+                  example: "Jura E8 Black"
+                brand:
+                  type: string
+                  example: "Jura"
+                category:
+                  $ref: '#/components/schemas/Category'
+                basePrice:
+                  type: integer
+                  minimum: 0
+                  example: 285000
+                costPrice:
+                  type: integer
+                  minimum: 0
+                  example: 190000
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '403':
+          description: Requires MANAGER or ADMIN role
+        '409':
+          description: SKU already exists
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Get single product
+      operationId: getProduct
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          description: Not found
+
+    patch:
+      tags: [Products]
+      summary: Update product fields (MANAGER+)
+      operationId: updateProduct
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                brand:
+                  type: string
+                basePrice:
+                  type: integer
+                  minimum: 0
+                status:
+                  type: string
+                  enum: [ACTIVE, DISPLAY_SAMPLE, DISCONTINUED]
+      responses:
+        '200':
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+
+    delete:
+      tags: [Products]
+      summary: Archive product — sets status to DISCONTINUED (MANAGER+)
+      operationId: archiveProduct
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Product archived
+
+  /inventory/income:
+    post:
+      tags: [Inventory]
+      summary: Receive goods into a location (all roles)
+      operationId: recordIncome
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, locationId, quantity]
+              properties:
+                productId:
+                  type: string
+                  format: uuid
+                locationId:
+                  type: string
+                  format: uuid
+                quantity:
+                  type: integer
+                  minimum: 1
+                  example: 10
+                note:
+                  type: string
+                  example: "Delivery from supplier"
+      responses:
+        '201':
+          description: Stock updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stock'
+        '404':
+          description: Product or location not found
+
+  /inventory/expense:
+    post:
+      tags: [Inventory]
+      summary: Record goods leaving a location (sale, damage, write-off)
+      operationId: recordExpense
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, locationId, quantity, reason]
+              properties:
+                productId:
+                  type: string
+                  format: uuid
+                locationId:
+                  type: string
+                  format: uuid
+                quantity:
+                  type: integer
+                  minimum: 1
+                  example: 3
+                reason:
+                  type: string
+                  enum: [SALE, DAMAGE, RETURN, WRITEOFF]
+                  example: SALE
+                note:
+                  type: string
+                  example: "Customer sale #1042"
+      responses:
+        '201':
+          description: Stock updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stock'
+        '404':
+          description: No stock record at this location
+        '409':
+          description: Insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: INSUFFICIENT_STOCK
+                message: "Insufficient stock: requested 5, available 3"
+                details:
+                  requested: 5
+                  available: 3
+
+  /inventory/transfer:
+    post:
+      tags: [Inventory]
+      summary: Transfer stock between locations atomically (MANAGER+)
+      operationId: transferStock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, fromLocationId, toLocationId, quantity]
+              properties:
+                productId:
+                  type: string
+                  format: uuid
+                fromLocationId:
+                  type: string
+                  format: uuid
+                toLocationId:
+                  type: string
+                  format: uuid
+                quantity:
+                  type: integer
+                  minimum: 1
+                  example: 4
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Transfer complete — both location records updated atomically
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from:
+                    $ref: '#/components/schemas/Stock'
+                  to:
+                    $ref: '#/components/schemas/Stock'
+        '400':
+          description: Source and destination are the same location
+        '404':
+          description: No stock at source location
+        '409':
+          description: Insufficient stock at source
+
+  /inventory/history:
+    get:
+      tags: [Inventory]
+      summary: Movement history with cursor pagination
+      operationId: getMovementHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: productId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: locationId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/MovementType'
+      responses:
+        '200':
+          description: Paginated movement log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MovementLog'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /inventory/low-stock:
+    get:
+      tags: [Inventory]
+      summary: Active low-stock alerts
+      operationId: getLowStock
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: locationId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by specific location
+      responses:
+        '200':
+          description: List of low-stock alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+
+  /decay/events:
+    get:
+      tags: [Decay]
+      summary: Decay event history with cursor pagination (MANAGER+)
+      operationId: listDecayEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: productId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Paginated decay event log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DecayEvent'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /decay/trigger:
+    post:
+      tags: [Decay]
+      summary: Manually trigger a decay cycle (ADMIN only)
+      description: |
+        Runs the dead-stock decay algorithm immediately.
+        Normally scheduled every 72 h via node-cron.
+        Products with daysInInventory > DECAY_THRESHOLD_DAYS receive a
+        DECAY_PERCENT_PER_CYCLE% discount, capped at DECAY_MAX_DISCOUNT%.
+        Products hitting the cap are escalated to CRITICAL_DEADSTOCK status.
+      operationId: triggerDecay
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Decay cycle complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Decay cycle complete. 3 products received markdown."
+                  productsUpdated:
+                    type: integer
+                    example: 3
+        '403':
+          description: ADMIN only
+
+  /locations:
+    get:
+      tags: [Locations]
+      summary: List all locations in tenant
+      operationId: listLocations
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All locations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Location'
+
+    post:
+      tags: [Locations]
+      summary: Create a new warehouse/store location (ADMIN)
+      operationId: createLocation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, address]
+              properties:
+                name:
+                  type: string
+                  example: "Almaty Warehouse"
+                address:
+                  type: string
+                  example: "Abay Ave 150, Almaty"
+      responses:
+        '201':
+          description: Location created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+
+  /locations/{id}:
+    get:
+      tags: [Locations]
+      summary: Get location with current stock snapshot
+      operationId: getLocation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Location with stock details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Location'
+                  - type: object
+                    properties:
+                      stocks:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: '#/components/schemas/Stock'
+                            - type: object
+                              properties:
+                                product:
+                                  $ref: '#/components/schemas/Product'
+        '404':
+          description: Location not found
+
+  /forecast:
+    get:
+      tags: [Forecast]
+      summary: Demand forecast for all active products (MANAGER+)
+      operationId: getAllForecasts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: weeks
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 4
+          description: Number of weeks of sales history to analyze
+      responses:
+        '200':
+          description: Forecasts sorted by urgency (needsReorder first)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ForecastResult'
+                  weeksAnalyzed:
+                    type: integer
+                    example: 4
+
+  /forecast/{productId}:
+    get:
+      tags: [Forecast]
+      summary: Demand forecast for a single product (MANAGER+)
+      operationId: getProductForecast
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: weeks
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 4
+      responses:
+        '200':
+          description: Product forecast
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastResult'
+        '404':
+          description: Product not found
+
+  /queue/status:
+    get:
+      tags: [Queue]
+      summary: BullMQ email queue statistics (ADMIN)
+      operationId: getQueueStatus
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current queue counters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  waiting:
+                    type: integer
+                    example: 0
+                  active:
+                    type: integer
+                    example: 1
+                  completed:
+                    type: integer
+                    example: 47
+                  failed:
+                    type: integer
+                    example: 2
+        '403':
+          description: ADMIN only
