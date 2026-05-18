@@ -69,7 +69,8 @@ export const refresh = [
 export const logout = [
   validateBody(logoutSchema),
   asyncHandler(async (req, res) => {
-    await authService.logoutUser(req.body.refreshToken);
+    const accessToken = req.headers.authorization?.split(' ')[1];
+    await authService.logoutUser(req.body.refreshToken, accessToken);
     res.status(204).send();
   }),
 ];

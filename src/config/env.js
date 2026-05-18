@@ -17,6 +17,7 @@ const envSchema = z.object({
   DECAY_PERCENT_PER_CYCLE: z.coerce.number().default(10),
   DECAY_MAX_DISCOUNT: z.coerce.number().default(50),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  SUPERADMIN_SETUP_KEY: z.string().min(16, 'SUPERADMIN_SETUP_KEY must be at least 16 characters'),
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required'),
   EMAIL_FROM: z.string().default('LeanStock <onboarding@resend.dev>'),
   APP_URL: z.string().default('http://localhost:3000'),

@@ -117,6 +117,7 @@ describe('Auth flow: register → login → refresh → logout', () => {
   it('POST /auth/logout should succeed and revoke token', async () => {
     const res = await request(app)
       .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({ refreshToken });
 
     expect(res.status).toBe(204);

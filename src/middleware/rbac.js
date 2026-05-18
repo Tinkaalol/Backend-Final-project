@@ -25,6 +25,7 @@ export function requireRole(...allowedRoles) {
   };
 }
 
+export const superAdminOnly = requireRole('SUPERADMIN');
 export const adminOnly = requireRole('ADMIN');
 export const managerOrAbove = requireRole('ADMIN', 'MANAGER');
 export const allRoles = requireRole('ADMIN', 'MANAGER', 'STOREKEEPER');

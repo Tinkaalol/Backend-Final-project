@@ -434,40 +434,6 @@ paths:
         '429':
           description: Rate limit exceeded (5 req/min per IP)
 
-  /auth/verify-email:
-    get:
-      tags: [Auth]
-      summary: Verify email address via token link
-      operationId: verifyEmail
-      parameters:
-        - name: token
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uuid
-          description: Token from the verification email
-      responses:
-        '200':
-          description: Email verified successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Email verified successfully. You can now log in."
-        '400':
-          description: Token missing, invalid, or expired
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                code: INVALID_TOKEN
-                message: "Invalid or expired verification token"
-
   /auth/login:
     post:
       tags: [Auth]

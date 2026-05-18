@@ -1,0 +1,1390 @@
+{
+  "info": {
+    "name": "LeanStock Backend API",
+    "description": "Complete API collection for LeanStock \u2014 dead-stock decay inventory management system.\n\n**Setup before use:**\n1. baseUrl is already set to http://localhost:3000/api/v1\n2. Set tenantId variable to your tenant UUID (from DB or seed)\n3. Run Register \u2192 Verify Email \u2192 Login in order \u2014 tokens save automatically\n4. All other requests use {{accessToken}} automatically via collection auth",
+    "_postman_id": "leanstock-api-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tenantId",
+      "value": "a0000000-0000-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "locationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "\ud83d\udc51 SuperAdmin Setup",
+      "item": [
+        {
+          "name": "1. Setup SuperAdmin (First Time)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@leanstock.com\",\n  \"password\": \"SuperAdmin123\",\n  \"setupKey\": \"dev-setup-key-min-32-char-secret-for-testing\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "setup"
+              ]
+            },
+            "description": "\u26a0\ufe0f RUN FIRST: Bootstrap SuperAdmin account.\nsetupKey from .env SUPERADMIN_SETUP_KEY\nAfter this, verify email and login with superadmin."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Login as SuperAdmin",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@leanstock.com\",\n  \"password\": \"SuperAdmin123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login with superadmin account. Tokens are saved automatically.",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "  pm.collectionVariables.set('accessToken', pm.response.json().accessToken);",
+                    "  pm.collectionVariables.set('refreshToken', pm.response.json().refreshToken);",
+                    "  console.log('\u2705 SuperAdmin tokens saved');",
+                    "}"
+                  ]
+                }
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "3. Create Tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coffee Shop KZ\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/tenants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "tenants"
+              ]
+            },
+            "description": "Create a new tenant. SuperAdmin only.\nSave the returned ID as {{tenantId}} for later requests."
+          },
+          "response": []
+        },
+        {
+          "name": "4. List All Tenants",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/tenants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "tenants"
+              ]
+            },
+            "description": "Get all tenants. SuperAdmin only."
+          },
+          "response": []
+        },
+        {
+          "name": "5. Create User in Tenant (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@coffeeshop.kz\",\n  \"password\": \"Admin123456\",\n  \"role\": \"ADMIN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/tenants/{{tenantId}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "tenants",
+                "{{tenantId}}",
+                "users"
+              ]
+            },
+            "description": "Create ADMIN user in a tenant. SuperAdmin only.\nUse this email to login on frontend later."
+          },
+          "response": []
+        },
+        {
+          "name": "6. Create User in Tenant (MANAGER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@coffeeshop.kz\",\n  \"password\": \"Manager123456\",\n  \"role\": \"MANAGER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/tenants/{{tenantId}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "tenants",
+                "{{tenantId}}",
+                "users"
+              ]
+            },
+            "description": "Create MANAGER user in a tenant. SuperAdmin only."
+          },
+          "response": []
+        },
+        {
+          "name": "7. Create User in Tenant (STOREKEEPER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"storekeeper@coffeeshop.kz\",\n  \"password\": \"Store123456\",\n  \"role\": \"STOREKEEPER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/tenants/{{tenantId}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "tenants",
+                "{{tenantId}}",
+                "users"
+              ]
+            },
+            "description": "Create STOREKEEPER user in a tenant. SuperAdmin only."
+          },
+          "response": []
+        },
+        {
+          "name": "8. List Users in Tenant",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/tenants/{{tenantId}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "tenants",
+                "{{tenantId}}",
+                "users"
+              ]
+            },
+            "description": "Get all users in a tenant. SuperAdmin only."
+          },
+          "response": []
+        },
+        {
+          "name": "9. Update User Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"ADMIN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/tenants/{{tenantId}}/users/{{userId}}/role",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "tenants",
+                "{{tenantId}}",
+                "users",
+                "{{userId}}",
+                "role"
+              ]
+            },
+            "description": "Change user role (ADMIN, MANAGER, STOREKEEPER). SuperAdmin only.\nReplace {{userId}} with actual user ID from List Users response."
+          },
+          "response": []
+        },
+        {
+          "name": "10. List SuperAdmins",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/superadmins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "superadmins"
+              ]
+            },
+            "description": "List all superadmin accounts. SuperAdmin only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83c\udfe5 Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness probe \u2014 verify server is running. No auth required."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd10 Auth",
+      "item": [
+        {
+          "name": "1. Register",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@coffeeshop.kz\",\n  \"password\": \"SecurePass1\",\n  \"role\": \"MANAGER\",\n  \"tenantId\": \"{{tenantId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Register a new user. Sends a real verification email via Resend. User cannot log in until email is verified.\n\nRoles: ADMIN | MANAGER | STOREKEEPER"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Verify Email",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email?token=PASTE_TOKEN_FROM_EMAIL",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-email"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "PASTE_TOKEN_FROM_EMAIL"
+                }
+              ]
+            },
+            "description": "Verify email with the UUID token from the verification email link. After this the user can log in."
+          },
+          "response": []
+        },
+        {
+          "name": "3. Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "  console.log('Tokens saved automatically');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@coffeeshop.kz\",\n  \"password\": \"SecurePass1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login and receive JWT tokens. accessToken and refreshToken are automatically saved to collection variables after this request."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Get Current User (me)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Returns the profile of the currently authenticated user. Demonstrates that Bearer token is working."
+          },
+          "response": []
+        },
+        {
+          "name": "5. Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "  console.log('Tokens rotated and saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Issue a new access + refresh token pair. Refresh token is rotated \u2014 the old one is revoked. New tokens saved automatically."
+          },
+          "response": []
+        },
+        {
+          "name": "6. Forgot Password",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@coffeeshop.kz\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Send password reset link to email. Always returns success to prevent email enumeration."
+          },
+          "response": []
+        },
+        {
+          "name": "7. Reset Password",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"PASTE_TOKEN_FROM_EMAIL\",\n  \"newPassword\": \"NewSecurePass1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Reset password with token from email. All existing sessions revoked after reset."
+          },
+          "response": []
+        },
+        {
+          "name": "8. Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revoke refresh token in Redis. Idempotent \u2014 returns 204 even if already expired."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udc65 Users (ADMIN only)",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all staff in the tenant with cursor pagination. Requires ADMIN role."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Staff Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('userId', body.user.id);",
+                  "  console.log('userId saved:', body.user.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"storekeeper@coffeeshop.kz\",\n  \"password\": \"StaffPass1\",\n  \"role\": \"STOREKEEPER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "Create new staff account within the same tenant. Requires ADMIN role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "Get a single staff member by ID. Requires ADMIN role."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Role / Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"MANAGER\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "Change role or deactivate a staff member. Cannot modify your own account. Requires ADMIN role."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83c\udfed Locations",
+      "item": [
+        {
+          "name": "List Locations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ]
+            },
+            "description": "Get all warehouse and store locations for the tenant."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('locationId', body.id);",
+                  "  console.log('locationId saved:', body.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Almaty Warehouse\",\n  \"address\": \"Abay Ave 150, Almaty\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations"
+              ]
+            },
+            "description": "Create a new warehouse or store location. locationId saved automatically. Requires ADMIN role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Location with Stock",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/locations/{{locationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "locations",
+                "{{locationId}}"
+              ]
+            },
+            "description": "Get location with full current stock snapshot \u2014 all products and their quantities at this location."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udce6 Products",
+      "item": [
+        {
+          "name": "List Products",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products?limit=20&sort=-createdAt",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "-createdAt"
+                },
+                {
+                  "key": "category",
+                  "value": "EQUIPMENT",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "disabled": true
+                },
+                {
+                  "key": "brand",
+                  "value": "Jura",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List products with filters and cursor pagination. Any authenticated role."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('productId', body.id);",
+                  "  console.log('productId saved:', body.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"JURA-E8-BLK\",\n  \"name\": \"Jura E8 Black\",\n  \"brand\": \"Jura\",\n  \"category\": \"EQUIPMENT\",\n  \"basePrice\": 285000,\n  \"costPrice\": 190000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ]
+            },
+            "description": "Create product. SKU: uppercase alphanumeric + dashes, 4-20 chars. productId saved automatically. Requires MANAGER or ADMIN."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Product by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Get full product details including current decay-adjusted price and daysInInventory."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jura E8 Black Edition\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Update name, brand, basePrice, or status. Requires MANAGER or ADMIN."
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Product (soft delete)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Soft-delete: sets status to DISCONTINUED. Product stays in DB for history. Requires MANAGER or ADMIN."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udcca Inventory",
+      "item": [
+        {
+          "name": "Income \u2014 Receive Goods",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"quantity\": 10,\n  \"note\": \"Delivery from supplier \u2014 invoice #4421\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/income",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "income"
+              ]
+            },
+            "description": "Record goods arriving at a location. Resets daysInInventory to 0 (fresh stock). Any authenticated role."
+          },
+          "response": []
+        },
+        {
+          "name": "Expense \u2014 Sell / Write-off",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"locationId\": \"{{locationId}}\",\n  \"quantity\": 2,\n  \"reason\": \"SALE\",\n  \"note\": \"Customer sale #1042\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/expense",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "expense"
+              ]
+            },
+            "description": "Record goods leaving a location. Prevents overselling via atomic DB update. reason: SALE | DAMAGE | RETURN | WRITEOFF. Any authenticated role."
+          },
+          "response": []
+        },
+        {
+          "name": "Transfer Between Locations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"fromLocationId\": \"{{locationId}}\",\n  \"toLocationId\": \"PASTE_SECOND_LOCATION_ID\",\n  \"quantity\": 3,\n  \"note\": \"Moving stock to showroom\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/inventory/transfer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "transfer"
+              ]
+            },
+            "description": "Atomically move stock between two locations \u2014 both sides update or neither does (transaction). Requires MANAGER or ADMIN."
+          },
+          "response": []
+        },
+        {
+          "name": "Movement History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/inventory/history?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "productId",
+                  "value": "{{productId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "locationId",
+                  "value": "{{locationId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "EXPENSE",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Full audit log of all stock movements with cursor pagination. Filter by product, location, or movement type."
+          },
+          "response": []
+        },
+        {
+          "name": "Low Stock Alerts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/inventory/low-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "low-stock"
+              ],
+              "query": [
+                {
+                  "key": "locationId",
+                  "value": "{{locationId}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List active unresolved low-stock alerts where quantity dropped below reorderThreshold."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udcc9 Decay",
+      "item": [
+        {
+          "name": "Decay Events History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/decay/events?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "decay",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "productId",
+                  "value": "{{productId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Append-only log of all decay pricing events \u2014 which products got markdowns and by how much. Requires MANAGER or ADMIN."
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Decay Cycle (manual)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/decay/trigger",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "decay",
+                "trigger"
+              ]
+            },
+            "description": "Manually run the dead-stock decay algorithm now. Normally runs every 72h via cron. Products over threshold get markdown; at max discount \u2192 CRITICAL_DEADSTOCK. Requires ADMIN."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\ud83d\udd2e Forecast",
+      "item": [
+        {
+          "name": "All Products Forecast",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/forecast?weeks=4",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forecast"
+              ],
+              "query": [
+                {
+                  "key": "weeks",
+                  "value": "4"
+                }
+              ]
+            },
+            "description": "Moving-average demand forecast for all active products. Sorted by urgency (needsReorder first). Requires MANAGER or ADMIN."
+          },
+          "response": []
+        },
+        {
+          "name": "Single Product Forecast",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/forecast/{{productId}}?weeks=4",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forecast",
+                "{{productId}}"
+              ],
+              "query": [
+                {
+                  "key": "weeks",
+                  "value": "4"
+                }
+              ]
+            },
+            "description": "Detailed forecast: avgWeeklySales, reorderPoint, weeksOfStockLeft, stockByLocation. Requires MANAGER or ADMIN."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "\u2699\ufe0f Queue (Background Workers)",
+      "item": [
+        {
+          "name": "Email Queue Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/queue/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "queue",
+                "status"
+              ]
+            },
+            "description": "BullMQ email queue counters: waiting, active, completed, failed. Use to demonstrate background worker is running. Requires ADMIN."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

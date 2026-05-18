@@ -9,7 +9,7 @@ router.post('/register', authRateLimit, ...authController.register);
 router.get('/verify-email', authController.verifyEmail);
 router.post('/login', authRateLimit, ...authController.login);
 router.post('/refresh', ...authController.refresh);
-router.post('/logout', ...authController.logout);
+router.post('/logout', requireAuth, ...authController.logout);
 router.post('/forgot-password', authRateLimit, ...authController.forgotPassword);
 router.post('/reset-password', ...authController.resetPassword);
 router.get('/me', requireAuth, authController.me);

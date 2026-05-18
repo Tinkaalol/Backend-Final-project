@@ -53,3 +53,20 @@ export async function revokeAllUserTokens(userId) {
     await redis.del(...keys);
   }
 }
+
+export async function blacklistAccessToken(token) {
+  try {
+    const payload = jwt.decode(token);
+    if (!payload || !payload.exp) return;
+    const ttl = payload.exp - Math.floor(Date.now() / 1000);
+    if (ttl > 0) {
+      await redis.set(`bl:access:${token}`, '1', 'EX', ttl);
+    }
+  } catch {
+  }
+}
+
+export async function isAccessTokenBlacklisted(token) {
+  const val = await redis.get(`bl:access:${token}`);
+  return val === '1';
+}

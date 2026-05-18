@@ -1,29 +1,40 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: leanstock-frontend
+    ports:
+      - "80:80"
+    environment:
+      VITE_API_BASE_URL: "/api/v1"
+    depends_on:
+      - app
+    restart: unless-stopped
+
   app:
     build: .
     container_name: leanstock-api
     ports:
       - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
     environment:
       DATABASE_URL: postgresql://leanstock:leanstock@postgres:5432/leanstock
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: local-dev-secret-min-32-characters-long
-      JWT_REFRESH_SECRET: local-dev-refresh-secret-also-32-chars
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-min-32-characters-long}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-dev-refresh-secret-also-32-chars}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
       CRON_DECAY_ENABLED: "true"
       DECAY_THRESHOLD_DAYS: "30"
       DECAY_PERCENT_PER_CYCLE: "10"
       DECAY_MAX_DISCOUNT: "50"
-      CORS_ORIGIN: "http://localhost:5173"
-      RESEND_API_KEY: "${RESEND_API_KEY}"
-      EMAIL_FROM: "LeanStock <onboarding@resend.dev>"
-      APP_URL: "http://localhost:3000"
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      SUPERADMIN_SETUP_KEY: ${SUPERADMIN_SETUP_KEY:-dev-setup-key-min-32-char-secret-for-testing}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM:-LeanStock <onboarding@resend.dev>}
+      APP_URL: ${APP_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy

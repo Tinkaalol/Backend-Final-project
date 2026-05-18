@@ -1,4 +1,4 @@
-import { verifyAccessToken } from '../core/security.js';
+import { verifyAccessToken, isAccessTokenBlacklisted } from '../core/security.js';
 import { prisma } from '../config/database.js';
 
 export async function requireAuth(req, res, next) {
@@ -15,6 +15,13 @@ export async function requireAuth(req, res, next) {
 
   try {
     const payload = verifyAccessToken(token);
+
+    if (await isAccessTokenBlacklisted(token)) {
+      return res.status(401).json({
+        code: 'UNAUTHORIZED',
+        message: 'Token has been revoked. Please log in again.',
+      });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },

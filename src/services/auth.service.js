@@ -5,6 +5,7 @@ import {
   verifyRefreshToken, storeRefreshToken,
   isRefreshTokenValid, revokeRefreshToken,
   revokeAllUserTokens,
+  blacklistAccessToken,
 } from '../core/security.js';
 import { logAction } from '../utils/auditLogger.js';
 import {
@@ -25,15 +26,21 @@ export async function registerUser({ email, password, role, tenantId }) {
 
   const passwordHash = await hashPassword(password);
   const emailVerifyToken = uuidv4();
-  const emailVerifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); 
+  const emailVerifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  const data = {
+    email, passwordHash, role,
+    emailVerifyToken,
+    emailVerifyExpiresAt,
+    isEmailVerified: false,
+  };
+
+  if (tenantId) {
+    data.tenantId = tenantId;
+  }
 
   const user = await prisma.user.create({
-    data: {
-      email, passwordHash, role, tenantId,
-      emailVerifyToken,
-      emailVerifyExpiresAt,
-      isEmailVerified: false,
-    },
+    data,
     select: { id: true, email: true, role: true, tenantId: true, createdAt: true },
   });
 
@@ -207,10 +214,13 @@ export async function refreshAccessToken(refreshTokenStr) {
   return { accessToken: newAccessToken, refreshToken: newRefreshToken };
 }
 
-export async function logoutUser(refreshTokenStr) {
+export async function logoutUser(refreshTokenStr, accessTokenStr) {
   try {
     const payload = verifyRefreshToken(refreshTokenStr);
     await revokeRefreshToken(payload.userId, payload.tokenId);
   } catch {
+  }
+  if (accessTokenStr) {
+    await blacklistAccessToken(accessTokenStr);
   }
 }

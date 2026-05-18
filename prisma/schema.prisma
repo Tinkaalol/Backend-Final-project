@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum Role {
+  SUPERADMIN
   ADMIN
   MANAGER
   STOREKEEPER
@@ -60,10 +61,10 @@ model User {
   emailVerifyExpiresAt  DateTime?
   passwordResetToken    String?
   passwordResetExpiresAt DateTime?
-  tenantId              String
+  tenantId              String?
   createdAt             DateTime  @default(now())
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  tenant       Tenant?       @relation(fields: [tenantId], references: [id])
   movements    MovementLog[]
   auditLogs    AuditLog[]
 

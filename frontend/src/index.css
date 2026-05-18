@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    @apply h-full bg-ink-50 text-ink-900 antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  body {
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      'SF Pro Text',
+      'Inter',
+      system-ui,
+      sans-serif;
+  }
+  #root {
+    @apply h-full;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}

@@ -13,6 +13,8 @@
     "migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
+    "db:seed": "node src/seed.js",
+    "db:reset": "node src/reset.js && node src/seed.js",
     "lint": "eslint src/ tests/"
   },
   "dependencies": {
