@@ -8,10 +8,10 @@ services:
     environment:
       VITE_API_BASE_URL: "/api/v1"
     depends_on:
-      - app
+      - backend
     restart: unless-stopped
 
-  app:
+  backend:
     build: .
     ports:
       - "3000:3000"
