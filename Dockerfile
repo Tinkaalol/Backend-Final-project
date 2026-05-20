@@ -1,27 +1,38 @@
-FROM node:20-slim
+FROM node:20-slim AS builder
 
-# Install OpenSSL — required by Prisma on all platforms
+# Install OpenSSL
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Build backend
 COPY package*.json ./
 COPY prisma ./prisma/
-
 RUN npm install --omit=dev
-
 RUN npx prisma generate
-
-COPY . .
+COPY src ./src
+COPY openapi.yaml ./
 
 # Build frontend
+COPY frontend/package*.json ./frontend/
 WORKDIR /app/frontend
-COPY frontend/package*.json ./
 RUN npm install --omit=dev
 RUN npm run build
 
-# Back to root
+# Final stage
+FROM node:20-slim
+
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/prisma ./prisma/
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/openapi.yaml ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.prisma ./.prisma
+COPY --from=builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 3000
 
