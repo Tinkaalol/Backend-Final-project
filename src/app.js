@@ -38,11 +38,19 @@ try {
 
 app.use('/api/v1', router);
 
-app.use((req, res) => {
-  res.status(404).json({
-    code: 'NOT_FOUND',
-    message: `Route ${req.method} ${req.path} not found`,
-  });
+// Serve frontend in production
+const frontendDistPath = join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(frontendDistPath));
+
+// SPA fallback
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      code: 'NOT_FOUND',
+      message: `Route ${req.method} ${req.path} not found`,
+    });
+  }
+  res.sendFile(join(frontendDistPath, 'index.html'));
 });
 
 app.use(errorHandler);

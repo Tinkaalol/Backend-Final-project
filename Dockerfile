@@ -14,6 +14,15 @@ RUN npx prisma generate
 
 COPY . .
 
+# Build frontend
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install --omit=dev
+RUN npm run build
+
+# Back to root
+WORKDIR /app
+
 EXPOSE 3000
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]
