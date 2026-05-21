@@ -7,7 +7,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).regex(/[A-Z]/).regex(/[0-9]/),
   role: z.enum(['ADMIN', 'MANAGER', 'STOREKEEPER']).default('STOREKEEPER'),
-  tenantId: z.string().uuid(),
+  tenantId: z.string().uuid().optional(),
 });
 
 const loginSchema = z.object({
