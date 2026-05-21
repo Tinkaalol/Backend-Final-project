@@ -14,7 +14,7 @@ COPY src ./src
 COPY openapi.yaml ./
 
 # Build frontend
-COPY frontend/package*.json ./frontend/
+COPY frontend ./frontend/
 WORKDIR /app/frontend
 RUN npm install
 RUN npm run build
