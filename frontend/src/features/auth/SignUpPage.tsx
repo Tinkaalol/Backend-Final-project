@@ -1,31 +1,24 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate, Link } from 'react-router-dom';
-import { Coffee, Lock, Mail } from 'lucide-react';
+import { Navigate, useNavigate, Link } from 'react-router-dom';
+import { Coffee, Lock, Mail, User } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Input';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
 import { useAuth } from './AuthContext';
 import { extractErrorMessage } from '@/lib/api';
+import { api } from '@/lib/api';
 
-export function LoginPage() {
-  const { login, isAuthenticated, user } = useAuth();
+export function SignUpPage() {
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (isAuthenticated) {
-    const defaultTarget = user?.role === 'SUPERADMIN' ? '/superadmin/tenants' : '/inventory';
-    const target = (location.state as { from?: string } | null)?.from ?? defaultTarget;
-    return <Navigate to={target} replace />;
-  }
-
-  function getPostLoginTarget(role: string) {
-    const stateTarget = (location.state as { from?: string } | null)?.from;
-    if (stateTarget) return stateTarget;
-    return role === 'SUPERADMIN' ? '/superadmin/tenants' : '/inventory';
+    return <Navigate to="/inventory" replace />;
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -33,8 +26,15 @@ export function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const result = await login(email, password);
-      navigate(getPostLoginTarget(result.role), { replace: true });
+      await api.post('/auth/register', {
+        email,
+        password,
+        fullName,
+      });
+      navigate('/login', {
+        replace: true,
+        state: { message: 'Registration successful! Please verify your email and log in.' }
+      });
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
@@ -50,7 +50,7 @@ export function LoginPage() {
             <Coffee size={22} />
           </div>
           <h1 className="text-2xl font-semibold text-ink-900">LeanStock</h1>
-          <p className="text-sm text-ink-500">Coffee Inventory Management</p>
+          <p className="text-sm text-ink-500">Create your account</p>
         </div>
 
         <form
@@ -58,6 +58,19 @@ export function LoginPage() {
           className="space-y-4 rounded-xl border border-ink-200/70 bg-white p-6 shadow-card"
         >
           {error ? <ErrorBanner message={error} /> : null}
+
+          <Field label="Full Name" htmlFor="fullName" required>
+            <Input
+              id="fullName"
+              type="text"
+              autoComplete="name"
+              required
+              leadingIcon={<User size={16} />}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="John Doe"
+            />
+          </Field>
 
           <Field label="Email" htmlFor="email" required>
             <Input
@@ -76,7 +89,7 @@ export function LoginPage() {
             <Input
               id="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               required
               leadingIcon={<Lock size={16} />}
               value={password}
@@ -86,14 +99,14 @@ export function LoginPage() {
           </Field>
 
           <Button type="submit" loading={submitting} className="w-full">
-            Sign in
+            Sign up
           </Button>
         </form>
 
         <p className="mt-4 text-center text-xs text-ink-500">
-          Don&apos;t have an account?{' '}
-          <Link to="/signup" className="font-semibold text-accent hover:underline">
-            Sign up here
+          Already have an account?{' '}
+          <Link to="/login" className="font-semibold text-accent hover:underline">
+            Sign in here
           </Link>
         </p>
       </div>

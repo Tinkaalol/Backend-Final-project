@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { SignUpPage } from '@/features/auth/SignUpPage';
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
 import { AppShell } from '@/components/layout/AppShell';
 import { SuperAdminShell } from '@/components/layout/SuperAdminShell';
@@ -18,6 +19,7 @@ export function AppRoutes() {
     <Routes>
       {/* Public */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignUpPage />} />
       <Route path="/superadmin/setup" element={<SetupPage />} />
 
       {/* Super-admin panel — SuperAdminShell handles its own auth + role guard */}
