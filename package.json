@@ -16,7 +16,7 @@
     "db:seed": "node src/seed.js",
     "db:reset": "node src/reset.js && node src/seed.js",
     "lint": "eslint src/ tests/",
-    "postinstall": "cd frontend && npm install && npm run build"
+    "build:frontend": "cd frontend && npm install && npm run build"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
