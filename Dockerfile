@@ -16,7 +16,7 @@ COPY openapi.yaml ./
 # Build frontend
 COPY frontend/package*.json ./frontend/
 WORKDIR /app/frontend
-RUN npm install --omit=dev
+RUN npm install
 RUN npm run build
 
 # Final stage
