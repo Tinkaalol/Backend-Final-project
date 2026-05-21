@@ -1,0 +1,11 @@
+TODO: Record and upload defense video
+
+Record a 5-minute walkthrough showing:
+1. Deployed app: navigate to https://your-app.deployrocks.com
+2. Auth flow: register → check email for verification → click verify link → login
+3. One inventory operation: create product → add income → view in list
+4. Background worker: show email job in queue or logs
+5. Tests: run npm test and show passing results
+6. Architecture: explain one technical decision (e.g., why Prisma transactions for safety)
+
+Upload to YouTube as unlisted and paste the link here:
