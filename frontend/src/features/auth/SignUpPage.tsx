@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, Link } from 'react-router-dom';
-import { Coffee, Lock, Mail, User } from 'lucide-react';
+import { Coffee, Lock, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Input';
 import { ErrorBanner } from '@/components/ui/ErrorBanner';
@@ -13,7 +13,6 @@ export function SignUpPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +28,6 @@ export function SignUpPage() {
       await api.post('/auth/register', {
         email,
         password,
-        fullName,
       });
       navigate('/login', {
         replace: true,
@@ -58,19 +56,6 @@ export function SignUpPage() {
           className="space-y-4 rounded-xl border border-ink-200/70 bg-white p-6 shadow-card"
         >
           {error ? <ErrorBanner message={error} /> : null}
-
-          <Field label="Full Name" htmlFor="fullName" required>
-            <Input
-              id="fullName"
-              type="text"
-              autoComplete="name"
-              required
-              leadingIcon={<User size={16} />}
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="John Doe"
-            />
-          </Field>
 
           <Field label="Email" htmlFor="email" required>
             <Input
