@@ -31,7 +31,6 @@ COPY --from=builder /app/prisma ./prisma/
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/openapi.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.prisma ./.prisma
 COPY --from=builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 3000
